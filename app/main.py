@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from app.routes import analyze
 
 app = FastAPI(
     title="Netra Vision",
@@ -8,6 +9,7 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+app.include_router(analyze.router)
 
 @app.get("/")
 def root():
