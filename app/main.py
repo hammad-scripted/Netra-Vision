@@ -55,6 +55,7 @@ def root():
             "POST /analyze_image/image": "Upload an image and return the results for disease detection.",
             "POST /analyze_image/batch": "Upload images in a batch and return the results for disease detection.",
             "GET /analyze_image/history": "List recent saved analysis summaries.",
+            "GET /analyze_image/image/{image_id}": "Get an uploaded image owned by the signed-in account.",
             "GET /health": "Check the health status of the API.",
             "GET /analyze_image/{image_id}": "Get the analysis results for a specific image by its ID.",
         },

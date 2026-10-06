@@ -24,13 +24,13 @@ export function AnalysisDetail() {
   const diseases = Array.isArray(analysis?.diseases) ? analysis.diseases : []
   const healthy = /healthy|normal|good/i.test(analysis?.health_status || "")
 
-  if (detailBusy) return <div className="detail-loading"><LoaderCircle className="spin" size={18} /> Loading the saved analysis…</div>
+  if (detailBusy) return <div id="analysis-detail" className="detail-loading"><LoaderCircle className="spin" size={18} /> Loading the saved analysis…</div>
   if (!activeResult || !analysis) {
-    return detailError ? null : <div className="detail-placeholder"><FileImage size={19} /><span>Choose a previous upload or enter its image ID to read the full field note.</span></div>
+    return detailError ? null : <div id="analysis-detail" className="detail-placeholder"><FileImage size={19} /><span>Choose a previous upload or enter its image ID to read the full field note.</span></div>
   }
 
   return (
-    <div className="analysis-detail">
+    <div id="analysis-detail" className="analysis-detail">
       <div className="detail-section-heading">
         <div><span>ANALYSIS DETAIL</span><h3>{analysis.crop_type || "Crop analysis"}</h3></div>
         <Badge variant={healthy ? "success" : "warning"} className="health-badge"><span className="health-dot" />{analysis.health_status || "Status unavailable"}</Badge>

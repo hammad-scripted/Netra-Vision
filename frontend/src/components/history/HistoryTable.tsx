@@ -24,6 +24,16 @@ export function HistoryTable() {
   const refreshAnalysisHistory = useAnalysisStore((state) => state.refreshAnalysisHistory)
   const openAnalysisById = useAnalysisStore((state) => state.openAnalysisById)
 
+  const openAnalysis = async (imageId: string) => {
+    await openAnalysisById(imageId)
+    window.requestAnimationFrame(() => {
+      document.getElementById("analysis-detail")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      })
+    })
+  }
+
   return (
     <>
       <div className="history-table-toolbar">
@@ -58,7 +68,7 @@ export function HistoryTable() {
                     <td><span className={entry.disease_count ? "history-findings history-findings-alert" : "history-findings"}>{entry.disease_count}</span></td>
                     <td><time dateTime={entry.created_at}>{formatDate(entry.created_at)}</time></td>
                     <td><code className="history-image-id" title={entry.image_id}>{entry.image_id}</code></td>
-                    <td><Button variant="outline" size="sm" className="history-open-button" onClick={() => void openAnalysisById(entry.image_id)} disabled={detailBusy} aria-label={`Open analysis ${entry.image_id}`}>Open <ChevronRight /></Button></td>
+                    <td><Button variant="outline" size="sm" className="history-open-button" onClick={() => void openAnalysis(entry.image_id)} disabled={detailBusy} aria-label={`Open analysis ${entry.image_id}`}>Open <ChevronRight /></Button></td>
                   </tr>
                 ))}
               </tbody>

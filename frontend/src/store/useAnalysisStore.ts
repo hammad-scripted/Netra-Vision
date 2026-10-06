@@ -10,6 +10,7 @@ import {
   getApiInfo,
   loginWithPassword,
   getSavedAnalysis,
+  getSavedAnalysisImage,
   setApiToken,
   ApiError,
   type AnalysisEntry,
@@ -41,6 +42,12 @@ function getInitialTheme(): Theme {
 
 let detailRequestId = 0
 let historyRequestId = 0
+let activeSavedPreviewUrl: string | undefined
+
+function releaseSavedPreviewUrl() {
+  if (activeSavedPreviewUrl) URL.revokeObjectURL(activeSavedPreviewUrl)
+  activeSavedPreviewUrl = undefined
+}
 
 interface AnalysisStore {
   theme: Theme
@@ -162,6 +169,7 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
   signOut: () => {
     historyRequestId += 1
     detailRequestId += 1
+    releaseSavedPreviewUrl()
     setApiToken(null)
     set({
       authenticated: false,
@@ -297,6 +305,9 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
     }
 
     const requestId = ++detailRequestId
+    if (activeSavedPreviewUrl && activeSavedPreviewUrl !== preview) {
+      releaseSavedPreviewUrl()
+    }
     set({
       lookupId: imageId,
       selectedImageId: imageId,
@@ -308,7 +319,23 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
 
     try {
       const result = await getSavedAnalysis(imageId)
-      if (requestId === detailRequestId) set({ activeResult: result })
+      let resolvedPreview = preview
+      if (!resolvedPreview) {
+        try {
+          resolvedPreview = await getSavedAnalysisImage(imageId)
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 401) throw error
+          // Keep the analysis readable if its original image is unavailable.
+        }
+      }
+      if (requestId === detailRequestId) {
+        if (resolvedPreview && resolvedPreview !== preview) {
+          activeSavedPreviewUrl = resolvedPreview
+        }
+        set({ activeResult: result, activePreview: resolvedPreview })
+      } else if (resolvedPreview && resolvedPreview !== preview) {
+        URL.revokeObjectURL(resolvedPreview)
+      }
     } catch (error) {
       if (requestId === detailRequestId) {
         if (error instanceof ApiError && error.status === 401) {
@@ -330,6 +357,7 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
     if (!selectedImages.length || busy) return
 
     const imagesToAnalyze = selectedImages
+    releaseSavedPreviewUrl()
     set({
       busy: true,
       formError: "",

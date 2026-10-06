@@ -40,6 +40,7 @@ The Vite app opens at `http://localhost:5173` and calls the API at `http://local
 - `POST /analyze_image/image` analyzes one JPEG or PNG upload. Send the file in the `file` multipart field and include the access token as a Bearer token.
 - `POST /analyze_image/batch` analyzes up to ten JPEG or PNG uploads. Send repeated `files` multipart fields and include the Bearer token. The response reports success or an error for each file.
 - `GET /analyze_image/history?limit=100` lists the signed-in account's saved analysis summaries, newest first (maximum 500).
+- `GET /analyze_image/image/{image_id}` returns the uploaded image for an analysis owned by the signed-in account.
 - `GET /analyze_image/{image_id}` returns a saved result owned by the signed-in account.
 - `GET /docs` opens the interactive API documentation.
 

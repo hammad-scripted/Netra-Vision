@@ -4,6 +4,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 
 from services.analysis_store import (
@@ -150,6 +151,36 @@ async def get_analysis_history(
         )
 
     return {"total": len(saved_results), "results": summaries}
+
+
+@router.get("/image/{image_id}")
+def get_analysis_image(
+    image_id: str,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> FileResponse:
+    """Return the uploaded image for an analysis owned by the signed-in account."""
+    try:
+        result = get_analysis_result(image_id, user["id"])
+    except (InvalidImageId, FileNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No image was found for that analysis.",
+        ) from exc
+
+    safe_image_id = image_id.lower()
+    image_path = DEFAULT_UPLOAD_DIR / safe_image_id
+    if not image_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The uploaded image is no longer available.",
+        )
+
+    media_type = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
+    return FileResponse(
+        image_path,
+        media_type=media_type,
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 @router.get("/{image_id}")

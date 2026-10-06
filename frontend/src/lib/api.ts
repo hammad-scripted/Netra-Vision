@@ -209,6 +209,15 @@ export async function getSavedAnalysis(imageId: string): Promise<CompletedAnalys
   return parseResponse<CompletedAnalysis>(response)
 }
 
+export async function getSavedAnalysisImage(imageId: string): Promise<string> {
+  const response = await fetch(
+    `${API_BASE_URL}/analyze_image/image/${encodeURIComponent(imageId)}`,
+    authenticatedRequest(),
+  )
+  if (!response.ok) return parseResponse<string>(response)
+  return URL.createObjectURL(await response.blob())
+}
+
 export async function getAnalysisHistory(
   limit = 100,
   signal?: AbortSignal,
