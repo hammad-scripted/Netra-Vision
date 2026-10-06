@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 import warnings
 import os
@@ -16,6 +17,8 @@ _SUPPORTED_FORMATS = {
 _MIME_ALIASES = {"image/jpg": "image/jpeg"}
 _MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MiB
 _MAX_IMAGE_DIMENSIONS = 2048  # 2048 pixels in width or height
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_UPLOAD_DIR = Path(os.getenv("NETRA_UPLOAD_DIR", PROJECT_ROOT / "uploads"))
 
 
 def validate_image(
@@ -126,12 +129,13 @@ def resize_image_if_needed(image_bytes: bytes) -> bytes:
 def save_image(
     image_bytes: bytes,
     file_path: str,
-    upload_dir: str = "uploads",
+    upload_dir: str | os.PathLike[str] = DEFAULT_UPLOAD_DIR,
 ) -> None:
     """
     Save the image bytes to the specified file path.
     """
-    os.makedirs(upload_dir, exist_ok=True)
-    full_path = os.path.join(upload_dir, file_path)
-    with open(full_path, "wb") as f:
+    upload_path = Path(upload_dir)
+    upload_path.mkdir(parents=True, exist_ok=True)
+    full_path = upload_path / file_path
+    with full_path.open("wb") as f:
         f.write(image_bytes)
