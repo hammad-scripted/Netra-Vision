@@ -63,6 +63,47 @@ export interface ApiInfo {
   endpoint: Record<string, string>
 }
 
+const API_TOKEN_KEY = "netra-api-token"
+let memoryToken: string | null = null
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message)
+    this.name = "ApiError"
+  }
+}
+
+export function hasApiToken(): boolean {
+  return Boolean(getApiToken())
+}
+
+export function getApiToken(): string | null {
+  if (typeof window === "undefined") return null
+  try {
+    return window.sessionStorage.getItem(API_TOKEN_KEY) || memoryToken
+  } catch {
+    return memoryToken
+  }
+}
+
+export function setApiToken(token: string | null): void {
+  if (typeof window === "undefined") return
+  memoryToken = token
+  try {
+    if (token) window.sessionStorage.setItem(API_TOKEN_KEY, token)
+    else window.sessionStorage.removeItem(API_TOKEN_KEY)
+  } catch {
+    // Keep the active browser session usable if storage is disabled.
+  }
+}
+
+function authenticatedRequest(init: RequestInit = {}): RequestInit {
+  const headers = new Headers(init.headers)
+  const token = getApiToken()
+  if (token) headers.set("Authorization", `Bearer ${token}`)
+  return { ...init, headers }
+}
+
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000")
   .replace(/\/$/, "")
 
@@ -70,7 +111,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => null)
   if (!response.ok) {
     const detail = typeof data?.detail === "string" ? data.detail : "The request could not be completed."
-    throw new Error(detail)
+    throw new ApiError(detail, response.status)
   }
   return data as T
 }
@@ -93,7 +134,7 @@ export async function analyzeImages(files: File[]): Promise<BatchAnalysisRespons
 
   const response = await fetch(
     `${API_BASE_URL}/analyze_image/${isSingle ? "image" : "batch"}`,
-    { method: "POST", body: formData },
+    authenticatedRequest({ method: "POST", body: formData }),
   )
 
   if (!response.ok) return parseResponse<BatchAnalysisResponse>(response)
@@ -112,6 +153,7 @@ export async function analyzeImages(files: File[]): Promise<BatchAnalysisRespons
 export async function getSavedAnalysis(imageId: string): Promise<CompletedAnalysis> {
   const response = await fetch(
     `${API_BASE_URL}/analyze_image/${encodeURIComponent(imageId)}`,
+    authenticatedRequest(),
   )
   return parseResponse<CompletedAnalysis>(response)
 }
@@ -122,7 +164,7 @@ export async function getAnalysisHistory(
 ): Promise<AnalysisHistoryResponse> {
   const response = await fetch(
     `${API_BASE_URL}/analyze_image/history?limit=${encodeURIComponent(limit)}`,
-    { signal },
+    authenticatedRequest({ signal }),
   )
   return parseResponse<AnalysisHistoryResponse>(response)
 }

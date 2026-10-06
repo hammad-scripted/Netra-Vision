@@ -22,7 +22,7 @@ def require_api_token(
         )
 
     if credentials is None or not secrets.compare_digest(
-        credentials.credentials, expected_token
+        credentials.credentials.encode("utf-8"), expected_token.encode("utf-8")
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -2,10 +2,13 @@ import { create } from "zustand"
 
 import {
   analyzeImages,
-  checkApiHealth as fetchApiHealth,
   getAnalysisHistory,
+  hasApiToken,
+  checkApiHealth as fetchApiHealth,
   getApiInfo,
   getSavedAnalysis,
+  setApiToken,
+  ApiError,
   type AnalysisEntry,
   type ApiInfo,
   type CompletedAnalysis,
@@ -37,6 +40,9 @@ let historyRequestId = 0
 
 interface AnalysisStore {
   theme: Theme
+  authenticated: boolean
+  authBusy: boolean
+  authError: string
   apiState: ApiState
   apiInfo: ApiInfo | null
   selectedImages: SelectedImage[]
@@ -56,6 +62,8 @@ interface AnalysisStore {
   formError: string
   detailError: string
   toggleTheme: () => void
+  signIn: (token: string) => Promise<boolean>
+  signOut: () => void
   setDragging: (dragging: boolean) => void
   addFiles: (fileList: FileList | File[]) => void
   removeSelectedImage: (id: string) => void
@@ -71,6 +79,9 @@ interface AnalysisStore {
 
 export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
   theme: getInitialTheme(),
+  authenticated: hasApiToken(),
+  authBusy: false,
+  authError: "",
   apiState: "checking",
   apiInfo: null,
   selectedImages: [],
@@ -91,6 +102,59 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
   detailError: "",
 
   toggleTheme: () => set((state) => ({ theme: state.theme === "light" ? "dark" : "light" })),
+  signIn: async (token) => {
+    const cleanToken = token.trim()
+    if (!cleanToken) {
+      set({ authError: "Enter your API access token." })
+      return false
+    }
+    setApiToken(cleanToken)
+    set({ authBusy: true, authError: "" })
+    try {
+      const response = await getAnalysisHistory()
+      set({
+        authenticated: true,
+        authBusy: false,
+        authError: "",
+        historyEntries: response.results,
+        historyTotal: response.total,
+        historyLoaded: true,
+        historyError: "",
+      })
+      return true
+    } catch (error) {
+      setApiToken(null)
+      set({
+        authenticated: false,
+        authBusy: false,
+        authError: error instanceof Error ? error.message : "Sign in failed.",
+      })
+      return false
+    }
+  },
+  signOut: () => {
+    historyRequestId += 1
+    detailRequestId += 1
+    setApiToken(null)
+    set({
+      authenticated: false,
+      authError: "",
+      historyEntries: [],
+      historyTotal: 0,
+      historyLoaded: false,
+      historyError: "",
+      selectedImages: [],
+      results: [],
+      busy: false,
+      detailBusy: false,
+      formError: "",
+      lookupId: "",
+      activeResult: null,
+      activePreview: undefined,
+      selectedImageId: null,
+      detailError: "",
+    })
+  },
   setDragging: (dragging) => set({ dragging }),
 
   addFiles: (fileList) => {
@@ -137,7 +201,7 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
       if (!signal?.aborted) {
         set({ apiState: "online" })
         if (!get().apiInfo) void get().fetchApiInfo(signal)
-        if (!get().historyLoaded && !get().historyBusy) {
+        if (get().authenticated && !get().historyLoaded && !get().historyBusy) {
           void get().refreshAnalysisHistory(signal)
         }
       }
@@ -169,6 +233,10 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
       }
     } catch (error) {
       if (requestId === historyRequestId && !signal?.aborted) {
+        if (error instanceof ApiError && error.status === 401) {
+          setApiToken(null)
+          set({ authenticated: false })
+        }
         set({
           historyError: error instanceof Error ? error.message : "Could not load previous uploads.",
           historyLoaded: false,
@@ -203,6 +271,10 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
       if (requestId === detailRequestId) set({ activeResult: result })
     } catch (error) {
       if (requestId === detailRequestId) {
+        if (error instanceof ApiError && error.status === 401) {
+          setApiToken(null)
+          set({ authenticated: false })
+        }
         set({
           activeResult: null,
           detailError: error instanceof Error ? error.message : "Could not load this analysis.",
@@ -243,6 +315,10 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
       )
       if (firstCompleted) void get().selectResult(firstCompleted)
     } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setApiToken(null)
+        set({ authenticated: false })
+      }
       set({ formError: error instanceof Error ? error.message : "Analysis failed. Please try again." })
     } finally {
       set({ busy: false })
