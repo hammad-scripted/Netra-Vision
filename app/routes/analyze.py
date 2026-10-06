@@ -29,8 +29,11 @@ MAX_BATCH_IMAGES = 10
 async def _analyze_upload(file: UploadFile) -> dict[str, Any]:
     """Validate one upload, analyze it, and persist its result."""
     content = await file.read(MAX_IMAGE_SIZE + 1)
-    validation = validate_image(file.content_type, content)
-    processed = resize_image_if_needed(validation["content_bytes"])
+    validation = await run_in_threadpool(validate_image, file.content_type, content)
+    processed = await run_in_threadpool(
+        resize_image_if_needed,
+        validation["content_bytes"],
+    )
     image_id = f"{uuid4()}.{validation['format'].lower()}"
 
     try:

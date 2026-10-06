@@ -42,7 +42,7 @@ type ResultEntry = AnalysisEntry & { preview?: string }
 
 const MAX_IMAGES = 10
 const MAX_FILE_SIZE = 10 * 1024 * 1024
-const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png"])
+const ACCEPTED_TYPES = new Set(["image/jpeg", "image/jpg", "image/png"])
 
 function getInitialTheme(): Theme {
   const savedTheme = window.localStorage.getItem("netra-theme")
@@ -75,6 +75,7 @@ function App() {
   const [detailError, setDetailError] = useState("")
   const fileInput = useRef<HTMLInputElement>(null)
   const objectUrls = useRef(new Set<string>())
+  const detailRequestId = useRef(0)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -101,6 +102,20 @@ function App() {
       objectUrls.current.forEach((url) => URL.revokeObjectURL(url))
     }
   }, [])
+
+  useEffect(() => {
+    const retainedUrls = new Set([
+      ...selectedImages.map((image) => image.preview),
+      ...results.flatMap((entry) => entry.success && entry.preview ? [entry.preview] : []),
+      ...(activePreview ? [activePreview] : []),
+    ])
+    objectUrls.current.forEach((url) => {
+      if (!retainedUrls.has(url)) {
+        URL.revokeObjectURL(url)
+        objectUrls.current.delete(url)
+      }
+    })
+  }, [activePreview, results, selectedImages])
 
   const addFiles = useCallback((fileList: FileList | File[]) => {
     const files = Array.from(fileList)
@@ -131,29 +146,26 @@ function App() {
   }, [selectedImages.length])
 
   const removeSelected = (id: string) => {
-    setSelectedImages((current) => {
-      const image = current.find((item) => item.id === id)
-      if (image) {
-        URL.revokeObjectURL(image.preview)
-        objectUrls.current.delete(image.preview)
-      }
-      return current.filter((item) => item.id !== id)
-    })
+    setSelectedImages((current) => current.filter((item) => item.id !== id))
   }
 
   const selectResult = async (entry: ResultEntry) => {
     if (!entry.success) return
+    const requestId = ++detailRequestId.current
     setSelectedImageId(entry.image_id)
     setActivePreview(entry.preview)
     setDetailBusy(true)
     setDetailError("")
     try {
-      setActiveResult(await getSavedAnalysis(entry.image_id))
+      const result = await getSavedAnalysis(entry.image_id)
+      if (requestId === detailRequestId.current) setActiveResult(result)
     } catch (error) {
-      setActiveResult(null)
-      setDetailError(error instanceof Error ? error.message : "Could not load this analysis.")
+      if (requestId === detailRequestId.current) {
+        setActiveResult(null)
+        setDetailError(error instanceof Error ? error.message : "Could not load this analysis.")
+      }
     } finally {
-      setDetailBusy(false)
+      if (requestId === detailRequestId.current) setDetailBusy(false)
     }
   }
 
@@ -162,8 +174,11 @@ function App() {
     setBusy(true)
     setFormError("")
     setDetailError("")
+    setDetailBusy(false)
+    detailRequestId.current += 1
     setActiveResult(null)
     setSelectedImageId(null)
+    setActivePreview(undefined)
     try {
       const response = await analyzeImages(selectedImages.map((item) => item.file))
       const nextResults = response.results.map((entry, index) => ({
@@ -273,7 +288,8 @@ function App() {
                   onDragEnter={(event) => { event.preventDefault(); setDragging(true) }}
                   onDragOver={(event) => { event.preventDefault(); setDragging(true) }}
                   onDragLeave={(event) => {
-                    if (event.currentTarget === event.target) setDragging(false)
+                    const nextTarget = event.relatedTarget
+                    if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) setDragging(false)
                   }}
                   onDrop={handleDrop}
                 >
@@ -299,10 +315,6 @@ function App() {
                     <div className="selected-files-heading">
                       <span>Selected photos <b>{selectedImages.length}</b></span>
                       <button className="text-button" type="button" onClick={() => {
-                        selectedImages.forEach((image) => {
-                          URL.revokeObjectURL(image.preview)
-                          objectUrls.current.delete(image.preview)
-                        })
                         setSelectedImages([])
                         setFormError("")
                       }}>Clear all</button>

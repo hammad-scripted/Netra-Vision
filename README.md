@@ -4,13 +4,9 @@ Netra Vision helps review crop photos through a FastAPI service and a responsive
 
 ## Run the API
 
-From the repository root, create a local `.env` file with your API key:
+Use the root `.env.example` as a template for `.env`, then replace the placeholder with your API key. Keep `.env` local; it is ignored by Git.
 
-```text
-OPENAI_API_KEY=your-openai-api-key
-```
-
-Install the Python dependencies and start FastAPI:
+Install the Python dependencies and start FastAPI from the repository root:
 
 ```powershell
 python -m venv .venv
@@ -19,7 +15,7 @@ python -m pip install -r requirements.txt
 python -m uvicorn main:app --reload --app-dir app --port 8000
 ```
 
-The API loads `.env` through `python-dotenv`. Image uploads and completed analysis records are stored under `uploads/` by default. Set `NETRA_UPLOAD_DIR` or `NETRA_ANALYSIS_DIR` to change their storage locations. Set `CORS_ORIGINS` to a comma-separated list of allowed frontend origins when deploying.
+Image uploads and completed analysis records are stored under `uploads/` by default. Set `NETRA_UPLOAD_DIR` or `NETRA_ANALYSIS_DIR` to change their storage locations. Set `CORS_ORIGINS` to a comma-separated list of allowed frontend origins when deploying.
 
 ## Run the frontend
 
