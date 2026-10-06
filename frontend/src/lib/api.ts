@@ -124,8 +124,21 @@ export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localh
 async function parseResponse<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    const detail = typeof data?.detail === "string" ? data.detail : "The request could not be completed."
-    throw new ApiError(detail, response.status)
+    const detail: unknown = data?.detail
+    if (typeof detail === "string") throw new ApiError(detail, response.status)
+    if (Array.isArray(detail)) {
+      const messages = detail.flatMap((entry: unknown) => {
+        if (typeof entry !== "object" || entry === null) return []
+        const issue = entry as { loc?: unknown; msg?: unknown }
+        const path = Array.isArray(issue.loc)
+          ? issue.loc.filter((part): part is string => typeof part === "string" && !["body", "query", "path"].includes(part))
+          : []
+        const message = typeof issue.msg === "string" ? issue.msg : "Invalid value"
+        return [path.length ? `${path.join(".")}: ${message}` : message]
+      })
+      if (messages.length) throw new ApiError(messages.join("; "), response.status)
+    }
+    throw new ApiError("The request could not be completed.", response.status)
   }
   return data as T
 }

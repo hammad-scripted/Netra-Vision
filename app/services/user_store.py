@@ -2,23 +2,16 @@
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
-import os
-from pathlib import Path
 import sqlite3
 from typing import Any, Iterator
 from uuid import uuid4
 
-
-DEFAULT_DATABASE_PATH = Path(os.getenv("NETRA_AUTH_DATABASE", "uploads/netra_auth.sqlite3"))
+from services.database import database_connection
 
 
 @contextmanager
 def _connection() -> Iterator[sqlite3.Connection]:
-    database_path = Path(os.getenv("NETRA_AUTH_DATABASE", str(DEFAULT_DATABASE_PATH)))
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(database_path, timeout=15, isolation_level="IMMEDIATE")
-    connection.row_factory = sqlite3.Row
-    try:
+    with database_connection() as connection:
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -31,12 +24,6 @@ def _connection() -> Iterator[sqlite3.Connection]:
             """
         )
         yield connection
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
 
 
 def _user_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:

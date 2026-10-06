@@ -1,7 +1,6 @@
 """Account registration and password-based sign-in."""
 
 import os
-import re
 import secrets
 import sqlite3
 from typing import Any
@@ -19,14 +18,11 @@ from services.analysis_store import assign_unowned_analysis_results
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 _password_hasher = PasswordHash.recommended()
 _dummy_password_hash = _password_hasher.hash(secrets.token_urlsafe(32))
-_username_pattern = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 def register_account(request: RegistrationRequest) -> dict[str, Any]:
     """Create a username/email account and start its session."""
-    if not _username_pattern.fullmatch(request.username):
-        raise HTTPException(status_code=422, detail="Username must be 3–32 letters, numbers, dots, dashes, or underscores.")
     signing_secret = get_signing_secret()
     expires_in = _token_lifetime_seconds()
     try:

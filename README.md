@@ -15,7 +15,7 @@ python -m pip install -r requirements.txt
 python -m uvicorn main:app --reload --app-dir app --port 8000
 ```
 
-Image uploads and completed analysis records are stored under `uploads/` by default. Set `NETRA_UPLOAD_DIR` or `NETRA_ANALYSIS_DIR` to change their storage locations. Set `CORS_ORIGINS` to a comma-separated list of allowed frontend origins when deploying.
+Accounts and completed analysis results share the SQLite database configured by `NETRA_AUTH_DATABASE` (default `uploads/netra_auth.sqlite3`). You can open that file with DB Browser for SQLite and browse the `users` and `analysis_results` tables. Uploaded image files remain under `uploads/` by default; set `NETRA_UPLOAD_DIR` to change their location. Existing analysis JSON files under `NETRA_ANALYSIS_DIR` (default `uploads/results`) are imported into SQLite the first time analysis history is accessed. Set `CORS_ORIGINS` to a comma-separated list of allowed frontend origins when deploying.
 
 The first account created adopts unassigned analyses from the earlier shared-token workspace. New analyses are scoped to their uploading account. Passwords must be at least 12 characters and are stored as Argon2 hashes. Registration validates the email format but does not send a verification email.
 
