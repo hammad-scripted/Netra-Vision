@@ -11,12 +11,13 @@ import {
   LoaderCircle,
   Moon,
   ScanLine,
+  ShieldCheck,
   Sparkles,
   Sprout,
   Sun,
   X,
 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState, type DragEvent } from "react"
+import { useEffect, useRef, type DragEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -27,28 +28,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  analyzeImages,
-  checkApiHealth,
-  getSavedAnalysis,
-  type AnalysisEntry,
-  type CompletedAnalysis,
-} from "@/lib/api"
-
-type Theme = "light" | "dark"
-type ApiState = "checking" | "online" | "offline"
-type SelectedImage = { id: string; file: File; preview: string }
-type ResultEntry = AnalysisEntry & { preview?: string }
-
-const MAX_IMAGES = 10
-const MAX_FILE_SIZE = 10 * 1024 * 1024
-const ACCEPTED_TYPES = new Set(["image/jpeg", "image/jpg", "image/png"])
-
-function getInitialTheme(): Theme {
-  const savedTheme = window.localStorage.getItem("netra-theme")
-  if (savedTheme === "light" || savedTheme === "dark") return savedTheme
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-}
+import { useAnalysisStore } from "@/store/useAnalysisStore"
 
 function isHealthyStatus(value: string) {
   return /healthy|normal|good/i.test(value)
@@ -61,21 +41,28 @@ function severityVariant(severity: string) {
 }
 
 function App() {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme)
-  const [apiState, setApiState] = useState<ApiState>("checking")
-  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([])
-  const [results, setResults] = useState<ResultEntry[]>([])
-  const [activeResult, setActiveResult] = useState<CompletedAnalysis | null>(null)
-  const [activePreview, setActivePreview] = useState<string | undefined>()
-  const [selectedImageId, setSelectedImageId] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [detailBusy, setDetailBusy] = useState(false)
-  const [dragging, setDragging] = useState(false)
-  const [formError, setFormError] = useState("")
-  const [detailError, setDetailError] = useState("")
+  const theme = useAnalysisStore((state) => state.theme)
+  const apiState = useAnalysisStore((state) => state.apiState)
+  const selectedImages = useAnalysisStore((state) => state.selectedImages)
+  const results = useAnalysisStore((state) => state.results)
+  const activeResult = useAnalysisStore((state) => state.activeResult)
+  const activePreview = useAnalysisStore((state) => state.activePreview)
+  const selectedImageId = useAnalysisStore((state) => state.selectedImageId)
+  const busy = useAnalysisStore((state) => state.busy)
+  const detailBusy = useAnalysisStore((state) => state.detailBusy)
+  const dragging = useAnalysisStore((state) => state.dragging)
+  const formError = useAnalysisStore((state) => state.formError)
+  const detailError = useAnalysisStore((state) => state.detailError)
+  const toggleTheme = useAnalysisStore((state) => state.toggleTheme)
+  const setDragging = useAnalysisStore((state) => state.setDragging)
+  const addFiles = useAnalysisStore((state) => state.addFiles)
+  const removeSelectedImage = useAnalysisStore((state) => state.removeSelectedImage)
+  const clearSelectedImages = useAnalysisStore((state) => state.clearSelectedImages)
+  const checkApiHealth = useAnalysisStore((state) => state.checkApiHealth)
+  const analyzeSelectedImages = useAnalysisStore((state) => state.analyzeSelectedImages)
+  const selectResult = useAnalysisStore((state) => state.selectResult)
   const fileInput = useRef<HTMLInputElement>(null)
   const objectUrls = useRef(new Set<string>())
-  const detailRequestId = useRef(0)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -83,25 +70,15 @@ function App() {
   }, [theme])
 
   useEffect(() => {
-    let active = true
     const controller = new AbortController()
-    const refreshHealth = async () => {
-      try {
-        await checkApiHealth(controller.signal)
-        if (active) setApiState("online")
-      } catch {
-        if (active) setApiState("offline")
-      }
-    }
-    void refreshHealth()
-    const interval = window.setInterval(() => void refreshHealth(), 30000)
+    void checkApiHealth(controller.signal)
+    const interval = window.setInterval(() => void checkApiHealth(controller.signal), 30000)
     return () => {
-      active = false
       controller.abort()
       window.clearInterval(interval)
       objectUrls.current.forEach((url) => URL.revokeObjectURL(url))
     }
-  }, [])
+  }, [checkApiHealth])
 
   useEffect(() => {
     const retainedUrls = new Set([
@@ -109,6 +86,7 @@ function App() {
       ...results.flatMap((entry) => entry.success && entry.preview ? [entry.preview] : []),
       ...(activePreview ? [activePreview] : []),
     ])
+    retainedUrls.forEach((url) => objectUrls.current.add(url))
     objectUrls.current.forEach((url) => {
       if (!retainedUrls.has(url)) {
         URL.revokeObjectURL(url)
@@ -116,84 +94,6 @@ function App() {
       }
     })
   }, [activePreview, results, selectedImages])
-
-  const addFiles = useCallback((fileList: FileList | File[]) => {
-    const files = Array.from(fileList)
-    const availableSlots = MAX_IMAGES - selectedImages.length
-    const accepted: File[] = []
-    const errors: string[] = []
-
-    for (const file of files) {
-      const extensionLooksSupported = /\.(jpe?g|png)$/i.test(file.name)
-      if (!ACCEPTED_TYPES.has(file.type) && !(!file.type && extensionLooksSupported)) {
-        errors.push(`${file.name}: choose a JPEG or PNG image.`)
-      } else if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: the file is larger than 10 MB.`)
-      } else if (accepted.length >= availableSlots) {
-        errors.push(`You can analyze up to ${MAX_IMAGES} images at a time.`)
-      } else {
-        accepted.push(file)
-      }
-    }
-
-    const additions = accepted.map((file) => {
-      const preview = URL.createObjectURL(file)
-      objectUrls.current.add(preview)
-      return { id: crypto.randomUUID(), file, preview }
-    })
-    if (additions.length) setSelectedImages((current) => [...current, ...additions])
-    setFormError(errors[0] ?? "")
-  }, [selectedImages.length])
-
-  const removeSelected = (id: string) => {
-    setSelectedImages((current) => current.filter((item) => item.id !== id))
-  }
-
-  const selectResult = async (entry: ResultEntry) => {
-    if (!entry.success) return
-    const requestId = ++detailRequestId.current
-    setSelectedImageId(entry.image_id)
-    setActivePreview(entry.preview)
-    setDetailBusy(true)
-    setDetailError("")
-    try {
-      const result = await getSavedAnalysis(entry.image_id)
-      if (requestId === detailRequestId.current) setActiveResult(result)
-    } catch (error) {
-      if (requestId === detailRequestId.current) {
-        setActiveResult(null)
-        setDetailError(error instanceof Error ? error.message : "Could not load this analysis.")
-      }
-    } finally {
-      if (requestId === detailRequestId.current) setDetailBusy(false)
-    }
-  }
-
-  const handleAnalyze = async () => {
-    if (!selectedImages.length || busy) return
-    setBusy(true)
-    setFormError("")
-    setDetailError("")
-    setDetailBusy(false)
-    detailRequestId.current += 1
-    setActiveResult(null)
-    setSelectedImageId(null)
-    setActivePreview(undefined)
-    try {
-      const response = await analyzeImages(selectedImages.map((item) => item.file))
-      const nextResults = response.results.map((entry, index) => ({
-        ...entry,
-        preview: selectedImages[index]?.preview,
-      })) as ResultEntry[]
-      setResults(nextResults)
-      const firstCompleted = nextResults.find((entry): entry is CompletedAnalysis & { preview?: string } => entry.success)
-      if (firstCompleted) void selectResult(firstCompleted)
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Analysis failed. Please try again.")
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -227,7 +127,7 @@ function App() {
               size="icon"
               className="theme-toggle"
               aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-              onClick={() => setTheme((current) => current === "light" ? "dark" : "light")}
+              onClick={toggleTheme}
             >
               {theme === "light" ? <Moon /> : <Sun />}
             </Button>
@@ -314,10 +214,7 @@ function App() {
                   <div className="selected-files-block">
                     <div className="selected-files-heading">
                       <span>Selected photos <b>{selectedImages.length}</b></span>
-                      <button className="text-button" type="button" onClick={() => {
-                        setSelectedImages([])
-                        setFormError("")
-                      }}>Clear all</button>
+                      <button className="text-button" type="button" onClick={clearSelectedImages}>Clear all</button>
                     </div>
                     <div className="selected-file-list">
                       {selectedImages.map((image) => (
@@ -331,7 +228,7 @@ function App() {
                             className="icon-button remove-file"
                             type="button"
                             aria-label={`Remove ${image.file.name}`}
-                            onClick={(event) => { event.stopPropagation(); removeSelected(image.id) }}
+                            onClick={(event) => { event.stopPropagation(); removeSelectedImage(image.id) }}
                           ><X size={16} /></button>
                         </div>
                       ))}
@@ -343,7 +240,7 @@ function App() {
 
                 <div className="upload-footer">
                   <p><ShieldCheck size={15} /> Your photos are handled securely.</p>
-                  <Button className="analyze-button" onClick={handleAnalyze} disabled={!selectedImages.length || busy}>
+                  <Button className="analyze-button" onClick={analyzeSelectedImages} disabled={!selectedImages.length || busy}>
                     {busy ? <><LoaderCircle className="spin" /> Reading your photos</> : <><ScanLine /> Analyze {selectedImages.length || "crop"} {selectedImages.length === 1 ? "photo" : "photos"}<ArrowRight className="button-arrow" /></>}
                   </Button>
                 </div>
