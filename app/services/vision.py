@@ -1,16 +1,20 @@
 import base64
 import json
-
 import os
-from dotenv import load_dotenv
+from functools import lru_cache
 
-load_dotenv()  # Load environment variables from .env file
-from fastapi import HTTPException
+from dotenv import load_dotenv
 from openai import OpenAI
 
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)  # Initialize OpenAI client with API key from environment variable
+load_dotenv()  # Load environment variables from .env file
+
+
+@lru_cache(maxsize=1)
+def _get_client() -> OpenAI:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured")
+    return OpenAI(api_key=api_key)
 
 CROP_ANALYSIS_PROMPT = """Analyze the crop in the supplied image. Assess visible health, likely growth stage, crop type, and any visible disease symptoms. Do not claim a disease or deficiency unless the image provides visible evidence; state uncertainty in additional_notes when the image is unclear. Give practical, cautious recommendations for any listed issue."""
 
@@ -60,7 +64,7 @@ def analyze_crop_image(image_bytes: bytes, content_type: str) -> dict:
         raise ValueError("content_type must be image/jpeg or image/png")
 
     base64_image = base64.b64encode(image_bytes).decode("ascii")
-    response = client.responses.create(
+    response = _get_client().responses.create(
         model="gpt-6.1-sol",
         input=[
             {

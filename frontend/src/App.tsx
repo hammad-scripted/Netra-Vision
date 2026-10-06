@@ -14,10 +14,9 @@ import {
   Sparkles,
   Sprout,
   Sun,
-  Trash2,
   X,
 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -181,7 +180,7 @@ function App() {
     }
   }
 
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     setDragging(false)
     if (event.dataTransfer.files.length) addFiles(event.dataTransfer.files)
