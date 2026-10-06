@@ -41,7 +41,14 @@ export interface HealthResponse {
   service: string
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000")
+export interface ApiInfo {
+  message: string
+  app: string
+  version: string
+  endpoint: Record<string, string>
+}
+
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000")
   .replace(/\/$/, "")
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -56,6 +63,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
 export async function checkApiHealth(signal?: AbortSignal): Promise<HealthResponse> {
   const response = await fetch(`${API_BASE_URL}/health`, { signal })
   return parseResponse<HealthResponse>(response)
+}
+
+export async function getApiInfo(signal?: AbortSignal): Promise<ApiInfo> {
+  const response = await fetch(`${API_BASE_URL}/`, { signal })
+  return parseResponse<ApiInfo>(response)
 }
 
 export async function analyzeImages(files: File[]): Promise<BatchAnalysisResponse> {

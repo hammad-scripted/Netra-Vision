@@ -3,8 +3,10 @@ import { create } from "zustand"
 import {
   analyzeImages,
   checkApiHealth as fetchApiHealth,
+  getApiInfo,
   getSavedAnalysis,
   type AnalysisEntry,
+  type ApiInfo,
   type CompletedAnalysis,
 } from "@/lib/api"
 
@@ -33,6 +35,7 @@ let detailRequestId = 0
 interface AnalysisStore {
   theme: Theme
   apiState: ApiState
+  apiInfo: ApiInfo | null
   selectedImages: SelectedImage[]
   results: ResultEntry[]
   activeResult: CompletedAnalysis | null
@@ -49,6 +52,7 @@ interface AnalysisStore {
   removeSelectedImage: (id: string) => void
   clearSelectedImages: () => void
   checkApiHealth: (signal?: AbortSignal) => Promise<void>
+  fetchApiInfo: (signal?: AbortSignal) => Promise<void>
   analyzeSelectedImages: () => Promise<void>
   selectResult: (entry: ResultEntry) => Promise<void>
 }
@@ -56,6 +60,7 @@ interface AnalysisStore {
 export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
   theme: getInitialTheme(),
   apiState: "checking",
+  apiInfo: null,
   selectedImages: [],
   results: [],
   activeResult: null,
@@ -111,9 +116,21 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
   checkApiHealth: async (signal) => {
     try {
       await fetchApiHealth(signal)
-      if (!signal?.aborted) set({ apiState: "online" })
+      if (!signal?.aborted) {
+        set({ apiState: "online" })
+        if (!get().apiInfo) void get().fetchApiInfo(signal)
+      }
     } catch {
       if (!signal?.aborted) set({ apiState: "offline" })
+    }
+  },
+
+  fetchApiInfo: async (signal) => {
+    try {
+      const apiInfo = await getApiInfo(signal)
+      if (!signal?.aborted) set({ apiInfo })
+    } catch {
+      if (!signal?.aborted) set({ apiInfo: null })
     }
   },
 

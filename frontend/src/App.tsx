@@ -28,6 +28,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { API_BASE_URL } from "@/lib/api"
 import { useAnalysisStore } from "@/store/useAnalysisStore"
 
 function isHealthyStatus(value: string) {
@@ -43,6 +44,7 @@ function severityVariant(severity: string) {
 function App() {
   const theme = useAnalysisStore((state) => state.theme)
   const apiState = useAnalysisStore((state) => state.apiState)
+  const apiInfo = useAnalysisStore((state) => state.apiInfo)
   const selectedImages = useAnalysisStore((state) => state.selectedImages)
   const results = useAnalysisStore((state) => state.results)
   const activeResult = useAnalysisStore((state) => state.activeResult)
@@ -108,6 +110,10 @@ function App() {
   )
   const hasResults = results.length > 0
   const healthy = activeResult ? isHealthyStatus(activeResult.analysis.health_status) : false
+  const apiRoutes = apiInfo ? [
+    { route: "GET /", description: "Read the API name, version, and available route descriptions." },
+    ...Object.entries(apiInfo.endpoint).map(([route, description]) => ({ route, description })),
+  ] : []
 
   return (
     <div className="app-shell">
@@ -389,7 +395,43 @@ function App() {
         <footer className="footer">
           <span>© {new Date().getFullYear()} Netra Vision</span>
           <span className="footer-center"><span className={`footer-status-dot footer-status-${apiState}`} />{apiState === "online" ? "Connected to your analysis workspace" : apiState === "checking" ? "Checking analysis workspace" : "API connection unavailable"}</span>
-          <a href="http://localhost:8000/docs" target="_blank" rel="noreferrer">API docs <ArrowRight size={13} /></a>
+          <div className="footer-actions">
+            <details className="api-overview">
+              <summary>API endpoints <ChevronRight size={13} /></summary>
+              <div className="api-overview-panel">
+                <div className="api-overview-heading">
+                  <strong>{apiInfo?.app ?? "Netra Vision API"}</strong>
+                  {apiInfo && <span>v{apiInfo.version}</span>}
+                </div>
+                {apiInfo ? (
+                  <>
+                    <p className="api-overview-message">{apiInfo.message}</p>
+                    <ul className="api-route-list">
+                      {apiRoutes.map(({ route, description }) => {
+                        const [method, ...path] = route.split(" ")
+                        return (
+                          <li key={route}>
+                            <div className="api-route-name">
+                              <span className={`api-method api-method-${method.toLowerCase()}`}>{method}</span>
+                              <code>{path.join(" ")}</code>
+                            </div>
+                            <p>{description}</p>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="api-overview-message">{apiState === "offline" ? "API information is unavailable while the server is offline." : "Loading API information…"}</p>
+                )}
+                <div className="api-doc-links">
+                  <a href={`${API_BASE_URL}/docs`} target="_blank" rel="noreferrer">Swagger docs <ArrowRight size={13} /></a>
+                  <a href={`${API_BASE_URL}/redoc`} target="_blank" rel="noreferrer">ReDoc <ArrowRight size={13} /></a>
+                </div>
+              </div>
+            </details>
+            <a href={`${API_BASE_URL}/docs`} target="_blank" rel="noreferrer">API docs <ArrowRight size={13} /></a>
+          </div>
         </footer>
       </div>
     </div>
