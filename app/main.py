@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes import analyze
+from routes import analyze
 
 app = FastAPI(
     title="Netra Vision",
@@ -10,6 +10,7 @@ app = FastAPI(
 )
 
 app.include_router(analyze.router)
+
 
 @app.get("/")
 def root():
