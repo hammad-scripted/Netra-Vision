@@ -78,7 +78,6 @@ function App() {
   const setLookupId = useAnalysisStore((state) => state.setLookupId)
   const openAnalysisById = useAnalysisStore((state) => state.openAnalysisById)
   const analyzeSelectedImages = useAnalysisStore((state) => state.analyzeSelectedImages)
-  const selectResult = useAnalysisStore((state) => state.selectResult)
   const fileInput = useRef<HTMLInputElement>(null)
   const objectUrls = useRef(new Set<string>())
 
@@ -121,6 +120,8 @@ function App() {
 
   const issueCount = historyEntries.reduce((total, entry) => total + entry.disease_count, 0)
   const healthy = activeResult ? isHealthyStatus(activeResult.analysis.health_status) : false
+  const activeAnalysis = activeResult?.analysis
+  const activeDiseases = Array.isArray(activeAnalysis?.diseases) ? activeAnalysis.diseases : []
   const apiRoutes = apiInfo ? [
     { route: "GET /", description: "Read the API name, version, and available route descriptions." },
     ...Object.entries(apiInfo.endpoint).map(([route, description]) => ({ route, description })),
@@ -275,120 +276,165 @@ function App() {
                   <div className="section-heading-icon results-heading-icon"><Activity size={19} /></div>
                   <div>
                     <CardTitle>Field notes</CardTitle>
-                    <CardDescription>{hasResults ? "A closer look at your latest crop check." : "Your crop insights will show up here."}</CardDescription>
+                    <CardDescription>Browse earlier uploads or open a saved analysis by image ID.</CardDescription>
                   </div>
                 </div>
-                {hasResults && <Badge variant="outline" className="result-count-badge">{completedCount} {completedCount === 1 ? "ANALYSIS" : "ANALYSES"}</Badge>}
+                <Badge variant="outline" className="result-count-badge">{historyTotal} SAVED</Badge>
               </CardHeader>
-              <CardContent>
-                {!hasResults ? (
-                  <div className="empty-state">
-                    <div className="empty-illustration">
-                      <span className="empty-sun" />
-                      <Sprout className="empty-sprout" size={47} strokeWidth={1.3} />
-                      <span className="empty-ground" />
-                    </div>
-                    <h3>Good things grow<br />from a closer look.</h3>
-                    <p>Upload a photo to see a clear summary of crop health, growth stage, and visible concerns.</p>
-                    <div className="empty-footnote"><FileImage size={15} /> Your first field note starts with a photo</div>
+              <CardContent className="field-notes-content">
+                <form className="analysis-lookup" onSubmit={(event) => {
+                  event.preventDefault()
+                  void openAnalysisById(lookupId)
+                }}>
+                  <label htmlFor="analysis-image-id">Get an analysis by image ID</label>
+                  <div className="lookup-controls">
+                    <input
+                      id="analysis-image-id"
+                      type="search"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={lookupId}
+                      onChange={(event) => setLookupId(event.currentTarget.value)}
+                      placeholder="Paste a saved image ID"
+                    />
+                    <Button type="submit" disabled={!lookupId.trim() || detailBusy}>
+                      {detailBusy ? <LoaderCircle className="spin" /> : <Search />}
+                      {detailBusy ? "Loading" : "Get analysis"}
+                    </Button>
                   </div>
-                ) : (
-                  <div className="results-content">
-                    <div className="summary-strip">
-                      <div className="summary-metric"><span>Photos read</span><strong>{completedCount}<small> / {results.length}</small></strong></div>
-                      <div className="summary-divider" />
-                      <div className="summary-metric"><span>Visible concerns</span><strong className={issueCount ? "metric-alert" : ""}>{issueCount}</strong></div>
-                      <div className="summary-decoration"><Leaf size={20} /></div>
+                  <p>Open a row below or paste an ID from an earlier upload.</p>
+                </form>
+
+                {detailError && <div className="inline-alert lookup-alert" role="alert"><AlertCircle size={16} />{detailError}</div>}
+
+                <div className="history-summary">
+                  <div><span>Saved analyses</span><strong>{historyTotal}</strong></div>
+                  <div><span>Findings in recent uploads</span><strong className={issueCount ? "metric-alert" : ""}>{issueCount}</strong></div>
+                </div>
+
+                <div className="history-table-toolbar">
+                  <div>
+                    <h3>Previous uploads</h3>
+                    <p>{historyTotal > historyEntries.length ? "Showing the latest " + historyEntries.length + " of " + historyTotal + " saved analyses" : "Most recent saved analyses"}</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => void refreshAnalysisHistory()} disabled={historyBusy}>
+                    <RefreshCw className={historyBusy ? "spin" : ""} /> Refresh
+                  </Button>
+                </div>
+
+                {historyError && <div className="inline-alert history-alert" role="alert"><AlertCircle size={16} />{historyError}</div>}
+
+                <div className="history-table-shell">
+                  {historyBusy && historyEntries.length === 0 ? (
+                    <div className="history-state"><LoaderCircle className="spin" size={19} /> Loading saved analyses…</div>
+                  ) : historyEntries.length === 0 ? (
+                    <div className="history-state history-empty">
+                      <FileImage size={20} />
+                      <span>No previous uploads yet. Completed analyses will appear here.</span>
                     </div>
-
-                    <div className="result-list-heading"><span>ANALYSIS HISTORY</span><span>SELECT TO OPEN <ChevronRight size={12} /></span></div>
-                    <div className="result-list">
-                      {results.map((entry, index) => (
-                        entry.success ? (
-                          <button
-                            type="button"
-                            key={`${entry.image_id}-${index}`}
-                            className={`result-row ${selectedImageId === entry.image_id ? "result-row-active" : ""}`}
-                            onClick={() => void selectResult(entry)}
-                          >
-                            <span className="result-thumb">
-                              {entry.preview ? <img src={entry.preview} alt="" /> : <Leaf size={17} />}
-                            </span>
-                            <span className="result-row-copy">
-                              <span className="result-row-title">{entry.analysis.crop_type || entry.filename}</span>
-                              <span className="result-row-meta">{entry.filename} <i /> {entry.analysis.growth_stage}</span>
-                            </span>
-                            <Badge variant={isHealthyStatus(entry.analysis.health_status) ? "success" : "warning"} className="row-status-badge">
-                              {entry.analysis.health_status}
-                            </Badge>
-                            <ChevronRight className="result-chevron" size={16} />
-                          </button>
-                        ) : (
-                          <div className="result-row result-row-failed" key={`failed-${index}`}>
-                            <span className="result-thumb failed-thumb"><AlertCircle size={16} /></span>
-                            <span className="result-row-copy">
-                              <span className="result-row-title">{entry.filename}</span>
-                              <span className="result-row-meta result-error-text">{entry.error}</span>
-                            </span>
-                            <Badge variant="danger" className="row-status-badge">Needs retry</Badge>
-                          </div>
-                        )
-                      ))}
-                    </div>
-
-                    {detailBusy ? (
-                      <div className="detail-loading"><LoaderCircle className="spin" size={18} /> Opening saved field note…</div>
-                    ) : detailError ? (
-                      <div className="inline-alert detail-alert" role="alert"><AlertCircle size={16} />{detailError}</div>
-                    ) : activeResult ? (
-                      <div className="analysis-detail">
-                        <div className="detail-divider"><span /> CROP READOUT <span /></div>
-                        <div className="detail-topline">
-                          <div className="detail-crop-image">
-                            {activePreview ? <img src={activePreview} alt={`${activeResult.analysis.crop_type} crop`} /> : <Sprout size={23} />}
-                          </div>
-                          <div className="detail-crop-copy">
-                            <span className="detail-kicker">{activeResult.analysis.growth_stage || "Growth stage not clear"}</span>
-                            <h3>{activeResult.analysis.crop_type || "Crop identified"}</h3>
-                          </div>
-                          <Badge variant={healthy ? "success" : "warning"} className="health-badge">
-                            <span className="health-dot" />{activeResult.analysis.health_status}
-                          </Badge>
-                        </div>
-
-                        <div className="field-observation">
-                          <div className="field-observation-icon"><Sparkles size={16} /></div>
-                          <div><span>FIELD OBSERVATION</span><p>{activeResult.analysis.additional_notes || "No additional observations were noted."}</p></div>
-                        </div>
-
-                        <div className="disease-heading">
-                          <h4>Visible concerns</h4>
-                          <Badge variant="outline">{activeResult.analysis.diseases.length} {activeResult.analysis.diseases.length === 1 ? "finding" : "findings"}</Badge>
-                        </div>
-                        {activeResult.analysis.diseases.length === 0 ? (
-                          <div className="no-concerns"><CheckCircle2 size={17} /><span>No visible disease concerns in this photo.</span></div>
-                        ) : (
-                          <div className="disease-list">
-                            {activeResult.analysis.diseases.map((disease, diseaseIndex) => (
-                              <article className="disease-item" key={`${disease.name}-${diseaseIndex}`}>
-                                <div className="disease-title-row">
-                                  <span className="disease-mark"><AlertCircle size={15} /></span>
-                                  <h5>{disease.name}</h5>
-                                  <Badge variant={severityVariant(disease.severity)}>{disease.severity}</Badge>
+                  ) : (
+                    <div className="history-table-scroll">
+                      <table className="history-table">
+                        <thead>
+                          <tr>
+                            <th scope="col">Image and crop</th>
+                            <th scope="col">Health</th>
+                            <th scope="col">Findings</th>
+                            <th scope="col">Uploaded</th>
+                            <th scope="col">Image ID</th>
+                            <th scope="col"><span className="visually-hidden">Open analysis</span></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historyEntries.map((entry) => (
+                            <tr className={selectedImageId === entry.image_id ? "history-row-active" : ""} key={entry.image_id}>
+                              <td>
+                                <div className="history-image-cell">
+                                  <strong>{entry.crop_type || entry.filename}</strong>
+                                  <span>{entry.filename}{entry.growth_stage ? " · " + entry.growth_stage : ""}</span>
                                 </div>
-                                <p>{disease.description}</p>
-                                {disease.recommendations && <div className="recommendation"><span>Suggested next step</span><p>{disease.recommendations}</p></div>}
-                              </article>
-                            ))}
-                          </div>
-                        )}
-                        <div className="detail-disclaimer"><CircleHelpIcon /> Visual guidance is a starting point. Confirm uncertain symptoms with a local agronomist.</div>
+                              </td>
+                              <td><Badge variant={isHealthyStatus(entry.health_status) ? "success" : "warning"}>{entry.health_status || "Unknown"}</Badge></td>
+                              <td><span className={entry.disease_count ? "history-findings history-findings-alert" : "history-findings"}>{entry.disease_count}</span></td>
+                              <td><time dateTime={entry.created_at}>{formatDate(entry.created_at)}</time></td>
+                              <td><code className="history-image-id" title={entry.image_id}>{entry.image_id}</code></td>
+                              <td>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="history-open-button"
+                                  onClick={() => void openAnalysisById(entry.image_id)}
+                                  disabled={detailBusy}
+                                  aria-label={"Open analysis " + entry.image_id}
+                                >
+                                  Open <ChevronRight />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {detailBusy ? (
+                  <div className="detail-loading"><LoaderCircle className="spin" size={18} /> Loading the saved analysis…</div>
+                ) : activeResult && activeAnalysis ? (
+                  <div className="analysis-detail">
+                    <div className="detail-section-heading">
+                      <div>
+                        <span>ANALYSIS DETAIL</span>
+                        <h3>{activeAnalysis.crop_type || "Crop analysis"}</h3>
                       </div>
+                      <Badge variant={healthy ? "success" : "warning"} className="health-badge">
+                        <span className="health-dot" />{activeAnalysis.health_status || "Status unavailable"}
+                      </Badge>
+                    </div>
+                    <div className="detail-record-meta">
+                      <div><span>IMAGE ID</span><code>{activeResult.image_id}</code></div>
+                      <span>{activeResult.filename}</span>
+                      <time dateTime={activeResult.created_at}>{formatDate(activeResult.created_at)}</time>
+                    </div>
+                    <div className="detail-topline">
+                      <div className="detail-crop-image">
+                        {activePreview ? <img src={activePreview} alt={(activeAnalysis.crop_type || "Crop") + " photo"} /> : <Sprout size={23} />}
+                      </div>
+                      <div className="detail-crop-copy">
+                        <span className="detail-kicker">Growth stage</span>
+                        <h4>{activeAnalysis.growth_stage || "Not clear from this image"}</h4>
+                      </div>
+                    </div>
+                    <div className="field-observation">
+                      <div className="field-observation-icon"><Sparkles size={17} /></div>
+                      <div><span>FIELD OBSERVATION</span><p>{activeAnalysis.additional_notes || "No additional observations were noted."}</p></div>
+                    </div>
+                    <div className="disease-heading">
+                      <h4>Visible concerns</h4>
+                      <Badge variant="outline">{activeDiseases.length} {activeDiseases.length === 1 ? "finding" : "findings"}</Badge>
+                    </div>
+                    {activeDiseases.length === 0 ? (
+                      <div className="no-concerns"><CheckCircle2 size={18} /><span>No visible disease concerns in this photo.</span></div>
                     ) : (
-                      <div className="detail-placeholder"><span>Select an analysis to open its saved field note.</span></div>
+                      <div className="disease-list">
+                        {activeDiseases.map((disease, diseaseIndex) => (
+                          <article className="disease-item" key={disease.name + "-" + diseaseIndex}>
+                            <div className="disease-title-row">
+                              <span className="disease-mark"><AlertCircle size={16} /></span>
+                              <h5>{disease.name || "Finding"}</h5>
+                              <Badge variant={severityVariant(disease.severity || "")}>{disease.severity || "Unrated"}</Badge>
+                            </div>
+                            <p>{disease.description || "No description provided."}</p>
+                            {disease.recommendations && <div className="recommendation"><span>Suggested next step</span><p>{disease.recommendations}</p></div>}
+                          </article>
+                        ))}
+                      </div>
                     )}
+                    <div className="detail-disclaimer"><CircleHelpIcon /> Visual guidance is a starting point. Confirm uncertain symptoms with a local agronomist.</div>
                   </div>
-                )}
+                ) : !detailError ? (
+                  <div className="detail-placeholder"><FileImage size={19} /><span>Choose a previous upload or enter its image ID to read the full field note.</span></div>
+                ) : null}
               </CardContent>
             </Card>
           </section>

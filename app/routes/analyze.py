@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 
 from services.analysis_store import (
@@ -20,10 +20,15 @@ from services.image import (
     validate_image,
 )
 from services.vision import analyze_crop_image
+from security import require_api_token
 
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/analyze_image", tags=["Analyze"])
+router = APIRouter(
+    prefix="/analyze_image",
+    tags=["Analyze"],
+    dependencies=[Depends(require_api_token)],
+)
 MAX_BATCH_IMAGES = 10
 
 
