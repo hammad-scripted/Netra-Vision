@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -42,8 +43,8 @@ def health_check():
     return {"status": "ok", "service": "netra-vision"}
 
 
-@app.get("/")
-def root():
+@app.get("/api/info")
+def api_info():
     return {
         "message": "Welcome to Netra Vision API!",
         "app": "Netra Vision",
@@ -60,3 +61,8 @@ def root():
             "GET /analyze_image/{image_id}": "Get the analysis results for a specific image by its ID.",
         },
     }
+
+
+frontend_dist = Path(__file__).resolve().parents[1] / "frontend" / "dist"
+if frontend_dist.is_dir():
+    app.frontend("/", directory=frontend_dist)

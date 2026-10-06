@@ -2,7 +2,7 @@
 
 Netra Vision helps review crop photos through a FastAPI service and a responsive React workspace.
 
-## Run the API
+## Run the app
 
 Use the root `.env.example` as a template for `.env`. Set `OPENAI_API_KEY` and generate a private signing key for `NETRA_AUTH_SECRET_KEY` with `python -c "import secrets; print(secrets.token_hex(32))"`. Keep `.env` local; it is ignored by Git. New accounts are stored in SQLite at `NETRA_AUTH_DATABASE` (default `uploads/netra_auth.sqlite3`), and access tokens expire after `NETRA_ACCESS_TOKEN_MINUTES` (default 60).
 
@@ -12,8 +12,12 @@ Install the Python dependencies and start FastAPI from the repository root:
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+npm --prefix frontend install
+npm --prefix frontend run build
 python -m uvicorn main:app --reload --app-dir app --port 8000
 ```
+
+The FastAPI app serves the built React workspace from `/`. Rebuild `frontend/dist` after frontend changes. During local Vite development, the frontend uses `http://localhost:8000` for the API; in production, it uses the current origin unless `VITE_API_BASE_URL` is set.
 
 Accounts and completed analysis results share the SQLite database configured by `NETRA_AUTH_DATABASE` (default `uploads/netra_auth.sqlite3`). You can open that file with DB Browser for SQLite and browse the `users` and `analysis_results` tables. Uploaded image files remain under `uploads/` by default; set `NETRA_UPLOAD_DIR` to change their location. Existing analysis JSON files under `NETRA_ANALYSIS_DIR` (default `uploads/results`) are imported into SQLite the first time analysis history is accessed. Set `CORS_ORIGINS` to a comma-separated list of allowed frontend origins when deploying.
 
@@ -33,7 +37,7 @@ The Vite app opens at `http://localhost:5173` and calls the API at `http://local
 ## API routes
 
 - `GET /health` returns the API process status without authentication.
-- `GET /` returns public API metadata.
+- `GET /api/info` returns public API metadata.
 - `POST /auth/register` creates an account using JSON fields `username`, `email`, and `password`, then returns an access token.
 - `POST /auth/token` signs in using form fields `username` (username or email) and `password`.
 - `GET /auth/me` returns the current signed-in account.

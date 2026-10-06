@@ -118,7 +118,7 @@ function authenticatedRequest(init: RequestInit = {}): RequestInit {
   return { ...init, headers }
 }
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000")
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:8000" : window.location.origin))
   .replace(/\/$/, "")
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -149,7 +149,7 @@ export async function checkApiHealth(signal?: AbortSignal): Promise<HealthRespon
 }
 
 export async function getApiInfo(signal?: AbortSignal): Promise<ApiInfo> {
-  const response = await fetch(`${API_BASE_URL}/`, { signal })
+  const response = await fetch(`${API_BASE_URL}/api/info`, { signal })
   return parseResponse<ApiInfo>(response)
 }
 

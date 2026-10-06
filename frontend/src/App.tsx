@@ -60,7 +60,7 @@ function AppFrame() {
   }, [location.pathname])
 
   const apiRoutes = apiInfo ? [
-    { route: "GET /", description: "Read the API name, version, and available route descriptions." },
+    { route: "GET /api/info", description: "Read the API name, version, and available route descriptions." },
     ...Object.entries(apiInfo.endpoint).map(([route, description]) => ({ route, description })),
   ] : []
 
