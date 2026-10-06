@@ -33,6 +33,7 @@ The Vite app opens at `http://localhost:5173` and calls the API at `http://local
 - `GET /health` returns the API process status.
 - `POST /analyze_image/image` analyzes one JPEG or PNG upload. Send the file in the `file` multipart field.
 - `POST /analyze_image/batch` analyzes up to ten JPEG or PNG uploads. Send repeated `files` multipart fields. The response reports success or an error for each file.
+- `GET /analyze_image/history?limit=100` lists saved analysis summaries, newest first (maximum 500).
 - `GET /analyze_image/{image_id}` returns a saved result using the `image_id` returned by an upload request.
 - `GET /docs` opens the interactive API documentation.
 

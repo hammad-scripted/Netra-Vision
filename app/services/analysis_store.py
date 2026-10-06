@@ -54,3 +54,24 @@ def get_analysis_result(image_id: str) -> dict[str, Any]:
     with result_path.open("r", encoding="utf-8") as result_file:
         result: dict[str, Any] = json.load(result_file)
     return result
+
+
+def list_analysis_results() -> list[dict[str, Any]]:
+    """Return saved analyses, newest first, skipping unreadable result files."""
+    if not RESULTS_DIR.exists():
+        return []
+
+    results: list[dict[str, Any]] = []
+    for result_path in RESULTS_DIR.glob("*.json"):
+        try:
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(result, dict) and result.get("success") is True:
+            results.append(result)
+
+    results.sort(
+        key=lambda result: str(result.get("created_at", "")),
+        reverse=True,
+    )
+    return results

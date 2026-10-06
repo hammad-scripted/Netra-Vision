@@ -3,12 +3,13 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 
 from services.analysis_store import (
     InvalidImageId,
     get_analysis_result,
+    list_analysis_results,
     save_analysis_result,
 )
 from services.image import (
@@ -112,6 +113,36 @@ async def analyze_images_batch(
         "failed": len(results) - succeeded,
         "results": results,
     }
+
+
+@router.get("/history")
+async def get_analysis_history(
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict[str, Any]:
+    """Return a newest-first page of saved analysis summaries."""
+    saved_results = await run_in_threadpool(list_analysis_results)
+    summaries = []
+    for result in saved_results[:limit]:
+        analysis = result.get("analysis")
+        if not isinstance(analysis, dict):
+            analysis = {}
+        diseases = analysis.get("diseases")
+        if not isinstance(diseases, list):
+            diseases = []
+
+        summaries.append(
+            {
+                "image_id": str(result.get("image_id", "")),
+                "filename": str(result.get("filename", "upload")),
+                "created_at": str(result.get("created_at", "")),
+                "crop_type": str(analysis.get("crop_type", "")),
+                "growth_stage": str(analysis.get("growth_stage", "")),
+                "health_status": str(analysis.get("health_status", "Unknown")),
+                "disease_count": len(diseases),
+            }
+        )
+
+    return {"total": len(saved_results), "results": summaries}
 
 
 @router.get("/{image_id}")

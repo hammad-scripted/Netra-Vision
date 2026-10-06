@@ -36,6 +36,21 @@ export interface BatchAnalysisResponse {
   results: AnalysisEntry[]
 }
 
+export interface SavedAnalysisSummary {
+  image_id: string
+  filename: string
+  created_at: string
+  crop_type: string
+  growth_stage: string
+  health_status: string
+  disease_count: number
+}
+
+export interface AnalysisHistoryResponse {
+  total: number
+  results: SavedAnalysisSummary[]
+}
+
 export interface HealthResponse {
   status: string
   service: string
@@ -99,4 +114,15 @@ export async function getSavedAnalysis(imageId: string): Promise<CompletedAnalys
     `${API_BASE_URL}/analyze_image/${encodeURIComponent(imageId)}`,
   )
   return parseResponse<CompletedAnalysis>(response)
+}
+
+export async function getAnalysisHistory(
+  limit = 100,
+  signal?: AbortSignal,
+): Promise<AnalysisHistoryResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/analyze_image/history?limit=${encodeURIComponent(limit)}`,
+    { signal },
+  )
+  return parseResponse<AnalysisHistoryResponse>(response)
 }

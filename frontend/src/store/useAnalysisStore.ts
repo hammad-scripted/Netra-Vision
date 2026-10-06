@@ -3,11 +3,13 @@ import { create } from "zustand"
 import {
   analyzeImages,
   checkApiHealth as fetchApiHealth,
+  getAnalysisHistory,
   getApiInfo,
   getSavedAnalysis,
   type AnalysisEntry,
   type ApiInfo,
   type CompletedAnalysis,
+  type SavedAnalysisSummary,
 } from "@/lib/api"
 
 export type Theme = "light" | "dark"
@@ -31,6 +33,7 @@ function getInitialTheme(): Theme {
 }
 
 let detailRequestId = 0
+let historyRequestId = 0
 
 interface AnalysisStore {
   theme: Theme
@@ -38,6 +41,12 @@ interface AnalysisStore {
   apiInfo: ApiInfo | null
   selectedImages: SelectedImage[]
   results: ResultEntry[]
+  historyEntries: SavedAnalysisSummary[]
+  historyTotal: number
+  historyBusy: boolean
+  historyLoaded: boolean
+  historyError: string
+  lookupId: string
   activeResult: CompletedAnalysis | null
   activePreview: string | undefined
   selectedImageId: string | null
@@ -53,6 +62,9 @@ interface AnalysisStore {
   clearSelectedImages: () => void
   checkApiHealth: (signal?: AbortSignal) => Promise<void>
   fetchApiInfo: (signal?: AbortSignal) => Promise<void>
+  refreshAnalysisHistory: (signal?: AbortSignal) => Promise<void>
+  setLookupId: (imageId: string) => void
+  openAnalysisById: (imageId: string, preview?: string) => Promise<void>
   analyzeSelectedImages: () => Promise<void>
   selectResult: (entry: ResultEntry) => Promise<void>
 }
@@ -63,6 +75,12 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
   apiInfo: null,
   selectedImages: [],
   results: [],
+  historyEntries: [],
+  historyTotal: 0,
+  historyBusy: false,
+  historyLoaded: false,
+  historyError: "",
+  lookupId: "",
   activeResult: null,
   activePreview: undefined,
   selectedImageId: null,
@@ -119,6 +137,9 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
       if (!signal?.aborted) {
         set({ apiState: "online" })
         if (!get().apiInfo) void get().fetchApiInfo(signal)
+        if (!get().historyLoaded && !get().historyBusy) {
+          void get().refreshAnalysisHistory(signal)
+        }
       }
     } catch {
       if (!signal?.aborted) set({ apiState: "offline" })
@@ -131,6 +152,64 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
       if (!signal?.aborted) set({ apiInfo })
     } catch {
       if (!signal?.aborted) set({ apiInfo: null })
+    }
+  },
+
+  refreshAnalysisHistory: async (signal) => {
+    const requestId = ++historyRequestId
+    set({ historyBusy: true, historyError: "" })
+    try {
+      const response = await getAnalysisHistory(100, signal)
+      if (requestId === historyRequestId && !signal?.aborted) {
+        set({
+          historyEntries: response.results,
+          historyTotal: response.total,
+          historyLoaded: true,
+        })
+      }
+    } catch (error) {
+      if (requestId === historyRequestId && !signal?.aborted) {
+        set({
+          historyError: error instanceof Error ? error.message : "Could not load previous uploads.",
+          historyLoaded: false,
+        })
+      }
+    } finally {
+      if (requestId === historyRequestId) set({ historyBusy: false })
+    }
+  },
+
+  setLookupId: (lookupId) => set({ lookupId, detailError: "" }),
+
+  openAnalysisById: async (value, preview) => {
+    const imageId = value.trim()
+    if (!imageId) {
+      set({ detailError: "Enter an image ID to open its saved analysis." })
+      return
+    }
+
+    const requestId = ++detailRequestId
+    set({
+      lookupId: imageId,
+      selectedImageId: imageId,
+      activePreview: preview,
+      activeResult: null,
+      detailBusy: true,
+      detailError: "",
+    })
+
+    try {
+      const result = await getSavedAnalysis(imageId)
+      if (requestId === detailRequestId) set({ activeResult: result })
+    } catch (error) {
+      if (requestId === detailRequestId) {
+        set({
+          activeResult: null,
+          detailError: error instanceof Error ? error.message : "Could not load this analysis.",
+        })
+      }
+    } finally {
+      if (requestId === detailRequestId) set({ detailBusy: false })
     }
   },
 
@@ -157,6 +236,7 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
         preview: imagesToAnalyze[index]?.preview,
       })) as ResultEntry[]
       set({ results: nextResults })
+      void get().refreshAnalysisHistory()
 
       const firstCompleted = nextResults.find(
         (entry): entry is CompletedAnalysis & { preview?: string } => entry.success,
@@ -171,26 +251,6 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
 
   selectResult: async (entry) => {
     if (!entry.success) return
-    const requestId = ++detailRequestId
-    set({
-      selectedImageId: entry.image_id,
-      activePreview: entry.preview,
-      detailBusy: true,
-      detailError: "",
-    })
-
-    try {
-      const result = await getSavedAnalysis(entry.image_id)
-      if (requestId === detailRequestId) set({ activeResult: result })
-    } catch (error) {
-      if (requestId === detailRequestId) {
-        set({
-          activeResult: null,
-          detailError: error instanceof Error ? error.message : "Could not load this analysis.",
-        })
-      }
-    } finally {
-      if (requestId === detailRequestId) set({ detailBusy: false })
-    }
+    await get().openAnalysisById(entry.image_id, entry.preview)
   },
 }))
