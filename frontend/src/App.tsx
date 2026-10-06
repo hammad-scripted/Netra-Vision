@@ -14,6 +14,7 @@ function AppFrame() {
   const apiState = useAnalysisStore((state) => state.apiState)
   const apiInfo = useAnalysisStore((state) => state.apiInfo)
   const authenticated = useAnalysisStore((state) => state.authenticated)
+  const currentUser = useAnalysisStore((state) => state.currentUser)
   const selectedImages = useAnalysisStore((state) => state.selectedImages)
   const results = useAnalysisStore((state) => state.results)
   const activePreview = useAnalysisStore((state) => state.activePreview)
@@ -76,6 +77,7 @@ function AppFrame() {
               <NavLink to="/history" className={({ isActive }) => `navigation-link${isActive ? " navigation-link-active" : ""}`}>Field Notes</NavLink>
           </nav>}
           <div className="topbar-actions">
+            {authenticated && currentUser && <span className="account-chip" title={currentUser.email}>{currentUser.username}</span>}
             <div className={`api-status api-status-${apiState}`} title="API connection status"><span className="status-dot" /><span>{apiState === "checking" ? "Connecting" : apiState === "online" ? "API online" : "API offline"}</span></div>
             {authenticated ? (
               <Button variant="outline" size="sm" className="session-button" aria-label="Sign out" onClick={() => { signOut(); navigate("/login") }}><LogOut /> Sign out</Button>

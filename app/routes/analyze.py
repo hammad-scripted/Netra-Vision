@@ -20,19 +20,15 @@ from services.image import (
     validate_image,
 )
 from services.vision import analyze_crop_image
-from security import require_api_token
+from security import get_current_user
 
 
 logger = logging.getLogger(__name__)
-router = APIRouter(
-    prefix="/analyze_image",
-    tags=["Analyze"],
-    dependencies=[Depends(require_api_token)],
-)
+router = APIRouter(prefix="/analyze_image", tags=["Analyze"])
 MAX_BATCH_IMAGES = 10
 
 
-async def _analyze_upload(file: UploadFile) -> dict[str, Any]:
+async def _analyze_upload(file: UploadFile, owner_id: str) -> dict[str, Any]:
     """Validate one upload, analyze it, and persist its result."""
     content = await file.read(MAX_IMAGE_SIZE + 1)
     validation = await run_in_threadpool(validate_image, file.content_type, content)
@@ -58,24 +54,29 @@ async def _analyze_upload(file: UploadFile) -> dict[str, Any]:
     result = {
         "success": True,
         "image_id": image_id,
+        "owner_id": owner_id,
         "filename": file.filename or "upload",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "analysis": analysis,
     }
     await run_in_threadpool(save_image, processed, image_id, DEFAULT_UPLOAD_DIR)
     await run_in_threadpool(save_analysis_result, result)
-    return result
+    return {key: value for key, value in result.items() if key != "owner_id"}
 
 
 @router.post("/image")
-async def analyze_image_single(file: UploadFile = File(...)) -> dict[str, Any]:
+async def analyze_image_single(
+    file: UploadFile = File(...),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
     """Analyze one uploaded crop image and return its findings."""
-    return await _analyze_upload(file)
+    return await _analyze_upload(file, user["id"])
 
 
 @router.post("/batch")
 async def analyze_images_batch(
     files: list[UploadFile] = File(...),
+    user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Analyze up to ten images, returning a per-file result or error."""
     if not files:
@@ -92,7 +93,7 @@ async def analyze_images_batch(
     results: list[dict[str, Any]] = []
     for file in files:
         try:
-            results.append(await _analyze_upload(file))
+            results.append(await _analyze_upload(file, user["id"]))
         except HTTPException as exc:
             results.append(
                 {
@@ -123,9 +124,10 @@ async def analyze_images_batch(
 @router.get("/history")
 async def get_analysis_history(
     limit: int = Query(default=100, ge=1, le=500),
+    user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Return a newest-first page of saved analysis summaries."""
-    saved_results = await run_in_threadpool(list_analysis_results)
+    saved_results = await run_in_threadpool(list_analysis_results, user["id"])
     summaries = []
     for result in saved_results[:limit]:
         analysis = result.get("analysis")
@@ -151,10 +153,14 @@ async def get_analysis_history(
 
 
 @router.get("/{image_id}")
-def get_analysis(image_id: str) -> dict[str, Any]:
+def get_analysis(
+    image_id: str,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
     """Return a stored analysis by the ID returned from an upload request."""
     try:
-        return get_analysis_result(image_id)
+        result = get_analysis_result(image_id, user["id"])
+        return {key: value for key, value in result.items() if key != "owner_id"}
     except (InvalidImageId, FileNotFoundError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

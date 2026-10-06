@@ -63,7 +63,21 @@ export interface ApiInfo {
   endpoint: Record<string, string>
 }
 
-const API_TOKEN_KEY = "netra-api-token"
+export interface AccountProfile {
+  id: string
+  username: string
+  email: string
+  created_at: string
+}
+
+export interface AuthResponse {
+  access_token: string
+  token_type: "bearer"
+  expires_in: number
+  user: AccountProfile
+}
+
+const API_TOKEN_KEY = "netra-access-token"
 let memoryToken: string | null = null
 
 export class ApiError extends Error {
@@ -124,6 +138,30 @@ export async function checkApiHealth(signal?: AbortSignal): Promise<HealthRespon
 export async function getApiInfo(signal?: AbortSignal): Promise<ApiInfo> {
   const response = await fetch(`${API_BASE_URL}/`, { signal })
   return parseResponse<ApiInfo>(response)
+}
+
+export async function createAccount(username: string, email: string, password: string): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, email, password }),
+  })
+  return parseResponse<AuthResponse>(response)
+}
+
+export async function loginWithPassword(identifier: string, password: string): Promise<AuthResponse> {
+  const credentials = new URLSearchParams({ username: identifier, password })
+  const response = await fetch(`${API_BASE_URL}/auth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: credentials,
+  })
+  return parseResponse<AuthResponse>(response)
+}
+
+export async function getCurrentAccount(): Promise<AccountProfile> {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, authenticatedRequest())
+  return parseResponse<AccountProfile>(response)
 }
 
 export async function analyzeImages(files: File[]): Promise<BatchAnalysisResponse> {

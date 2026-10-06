@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-from routes import analyze
+from routes import analyze, auth
 
 app = FastAPI(
     title="Netra Vision",
@@ -33,6 +33,7 @@ app.add_middleware(
 )
 
 app.include_router(analyze.router)
+app.include_router(auth.router)
 
 
 @app.get("/health", tags=["Health"])
@@ -48,6 +49,9 @@ def root():
         "app": "Netra Vision",
         "version": "1.0.0",
         "endpoint": {
+            "POST /auth/register": "Create an account with a username, email, and password.",
+            "POST /auth/token": "Sign in with a username or email and password to receive a bearer token.",
+            "GET /auth/me": "Read the current signed-in account profile.",
             "POST /analyze_image/image": "Upload an image and return the results for disease detection.",
             "POST /analyze_image/batch": "Upload images in a batch and return the results for disease detection.",
             "GET /analyze_image/history": "List recent saved analysis summaries.",

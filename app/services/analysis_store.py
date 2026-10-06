@@ -48,16 +48,18 @@ def save_analysis_result(result: dict[str, Any]) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
-def get_analysis_result(image_id: str) -> dict[str, Any]:
-    """Load a previously completed analysis by its generated image ID."""
+def get_analysis_result(image_id: str, owner_id: str) -> dict[str, Any]:
+    """Load a saved analysis only when it belongs to the requesting account."""
     result_path = _result_path(image_id)
     with result_path.open("r", encoding="utf-8") as result_file:
         result: dict[str, Any] = json.load(result_file)
+    if result.get("owner_id") != owner_id:
+        raise FileNotFoundError(image_id)
     return result
 
 
-def list_analysis_results() -> list[dict[str, Any]]:
-    """Return saved analyses, newest first, skipping unreadable result files."""
+def list_analysis_results(owner_id: str) -> list[dict[str, Any]]:
+    """Return one account's saved analyses, newest first."""
     if not RESULTS_DIR.exists():
         return []
 
@@ -67,7 +69,11 @@ def list_analysis_results() -> list[dict[str, Any]]:
             result = json.loads(result_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if isinstance(result, dict) and result.get("success") is True:
+        if (
+            isinstance(result, dict)
+            and result.get("success") is True
+            and result.get("owner_id") == owner_id
+        ):
             results.append(result)
 
     results.sort(
@@ -75,3 +81,26 @@ def list_analysis_results() -> list[dict[str, Any]]:
         reverse=True,
     )
     return results
+
+
+def assign_unowned_analysis_results(owner_id: str) -> None:
+    """Give legacy shared-workspace analyses to the first created account."""
+    if not RESULTS_DIR.exists():
+        return
+
+    for result_path in RESULTS_DIR.glob("*.json"):
+        try:
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(result, dict) or result.get("success") is not True or result.get("owner_id"):
+            continue
+        result["owner_id"] = owner_id
+        temporary_path = result_path.with_name(f"{result_path.stem}.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(temporary_path, result_path)
+        except OSError:
+            continue
+        finally:
+            temporary_path.unlink(missing_ok=True)
