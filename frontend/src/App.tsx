@@ -10,6 +10,8 @@ import {
   Leaf,
   LoaderCircle,
   Moon,
+  RefreshCw,
+  Search,
   ScanLine,
   ShieldCheck,
   Sparkles,
@@ -41,12 +43,23 @@ function severityVariant(severity: string) {
   return "outline" as const
 }
 
+function formatDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value || "Date unavailable"
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date)
+}
+
 function App() {
   const theme = useAnalysisStore((state) => state.theme)
   const apiState = useAnalysisStore((state) => state.apiState)
   const apiInfo = useAnalysisStore((state) => state.apiInfo)
   const selectedImages = useAnalysisStore((state) => state.selectedImages)
   const results = useAnalysisStore((state) => state.results)
+  const historyEntries = useAnalysisStore((state) => state.historyEntries)
+  const historyTotal = useAnalysisStore((state) => state.historyTotal)
+  const historyBusy = useAnalysisStore((state) => state.historyBusy)
+  const historyError = useAnalysisStore((state) => state.historyError)
+  const lookupId = useAnalysisStore((state) => state.lookupId)
   const activeResult = useAnalysisStore((state) => state.activeResult)
   const activePreview = useAnalysisStore((state) => state.activePreview)
   const selectedImageId = useAnalysisStore((state) => state.selectedImageId)
@@ -61,6 +74,9 @@ function App() {
   const removeSelectedImage = useAnalysisStore((state) => state.removeSelectedImage)
   const clearSelectedImages = useAnalysisStore((state) => state.clearSelectedImages)
   const checkApiHealth = useAnalysisStore((state) => state.checkApiHealth)
+  const refreshAnalysisHistory = useAnalysisStore((state) => state.refreshAnalysisHistory)
+  const setLookupId = useAnalysisStore((state) => state.setLookupId)
+  const openAnalysisById = useAnalysisStore((state) => state.openAnalysisById)
   const analyzeSelectedImages = useAnalysisStore((state) => state.analyzeSelectedImages)
   const selectResult = useAnalysisStore((state) => state.selectResult)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -103,12 +119,7 @@ function App() {
     if (event.dataTransfer.files.length) addFiles(event.dataTransfer.files)
   }
 
-  const completedCount = results.filter((entry) => entry.success).length
-  const issueCount = results.reduce(
-    (total, entry) => total + (entry.success ? entry.analysis.diseases.length : 0),
-    0,
-  )
-  const hasResults = results.length > 0
+  const issueCount = historyEntries.reduce((total, entry) => total + entry.disease_count, 0)
   const healthy = activeResult ? isHealthyStatus(activeResult.analysis.health_status) : false
   const apiRoutes = apiInfo ? [
     { route: "GET /", description: "Read the API name, version, and available route descriptions." },
