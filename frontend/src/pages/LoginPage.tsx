@@ -50,8 +50,8 @@ export function LoginPage() {
         <form className="login-form" onSubmit={handleSubmit}>
           {mode === "register" ? <>
             <label htmlFor="account-username">Username</label>
-            <input id="account-username" type="text" autoComplete="username" minLength={3} maxLength={32} pattern="[A-Za-z0-9_.-]+" value={username} onChange={(event) => setUsername(event.currentTarget.value)} placeholder="Choose a username" required />
-            <p className="field-hint">3–32 letters, numbers, dots, dashes, or underscores.</p>
+            <input id="account-username" type="text" autoComplete="username" minLength={3} maxLength={32} value={username} onChange={(event) => setUsername(event.currentTarget.value)} placeholder="Choose a username" required />
+            <p className="field-hint">3 to 32 characters. Letters, numbers, spaces, dots, dashes, and underscores are allowed.</p>
             <label htmlFor="account-email">Email</label>
             <input id="account-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.currentTarget.value)} placeholder="you@example.com" required />
           </> : <>
@@ -60,7 +60,11 @@ export function LoginPage() {
           </>}
           <label htmlFor="account-password">Password</label>
           <input id="account-password" type="password" autoComplete={mode === "register" ? "new-password" : "current-password"} minLength={mode === "register" ? 12 : undefined} maxLength={128} value={password} onChange={(event) => setPassword(event.currentTarget.value)} placeholder={mode === "register" ? "At least 12 characters" : "Enter your password"} required />
-          {mode === "register" && <p className="field-hint">Use at least 12 characters.</p>}
+          {mode === "register" && <p className="field-hint" aria-live="polite">
+            {password.length < 12
+              ? `At least 12 characters (${password.length}/12 entered).`
+              : `${password.length} characters entered.`}
+          </p>}
           {authError && <div className="inline-alert" role="alert">{authError}</div>}
           <Button type="submit" className="login-submit" disabled={authBusy || (mode === "register" ? !username.trim() || !email.trim() || password.length < 12 : !identifier.trim() || !password)}>
             {authBusy ? <><LoaderCircle className="spin" /> {mode === "register" ? "Creating account" : "Signing in"}</> : mode === "register" ? "Create account" : "Sign in"}
